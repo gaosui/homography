@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Planar Reprojection Demo</title>
+  <style>
+    body {
+      margin: 0;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script src="/main.js" type="module"></script>
+</head>
+
+<body>
+  <canvas width="1000" height="500" id="canvas-overall"></canvas>
+  <div>
+    <canvas width="500" height="500" id="canvas-a"></canvas>
+    <canvas width="500" height="500" id="canvas-b"></canvas>
+  </div>
+  <canvas width="500" height="500" id="canvas-warp"></canvas>
+</body>
+
+</html>
