@@ -12,23 +12,23 @@ const rendererWarp = new THREE.WebGLRenderer({ canvas: canvasWarp });
 
 // Overall camera
 const camOverall = new THREE.PerspectiveCamera(75, canvasOverall.width / canvasOverall.height, 1, 1500);
-camOverall.position.set(50, 50, 100);
-camOverall.lookAt(0, 0, -100);
+camOverall.position.set(30, 50, 80);
+camOverall.lookAt(0, 0, -200);
 
-// Camera A floating around
-const camA = new THREE.PerspectiveCamera(20, 1, 100, 1000);
-camA.translateX(-20);
-camA.rotateY(-Math.PI / 32)
+// Camera A at origin
+const camA = new THREE.PerspectiveCamera(20, canvasA.width / canvasA.height, 100, 1000);
 
-// Camera B at origin
-const camB = new THREE.PerspectiveCamera(20, 1, 100, 1000);
+// Camera B floating
+const camB = new THREE.PerspectiveCamera(20, canvasB.width / canvasB.height, 100, 1000);
+// camB.rotateY(-Math.PI / 16)
+camB.position.set(0, 0, -20);
 
 // Scene creation
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x44444E);
 
 // Show axis
-const axesHelper = new THREE.AxesHelper(500);
+const axesHelper = new THREE.AxesHelper(300);
 scene.add(axesHelper);
 
 // Camera helpers
@@ -38,19 +38,13 @@ const camBHelper = new THREE.CameraHelper(camB);
 scene.add(camBHelper);
 
 // Plane
-// const planeTex = new THREE.TextureLoader().load("https://upload.wikimedia.org/wikipedia/commons/7/70/Checkerboard_pattern.svg");
-const planeTex = new THREE.TextureLoader().load("https://hips.hearstapps.com/ghk.h-cdn.co/assets/17/30/dachshund.jpg");
-
-const planeGeo = new THREE.PlaneGeometry(100, 100);
+const planeTex = new THREE.TextureLoader().load("https://upload.wikimedia.org/wikipedia/commons/7/70/Checkerboard_pattern.svg");
+const planeGeo = new THREE.PlaneGeometry(105.796, 105.796);
 const planeMaterial = new THREE.MeshBasicMaterial({ map: planeTex });
 const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-// const planeRotationAboutY = -Math.PI / 32;
-// planeMesh.rotateY(planeRotationAboutY);
-const planeDepth = -300;
-const planeNormal = new THREE.Vector3(0, 0, 1);
-// const planeNormal = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), planeRotationAboutY);
-// planeMesh.translateOnAxis(planeNormal, planeDepth);
-planeMesh.translateZ(-300)
+const planeDepth = 300;
+const planeNormal = new THREE.Vector3(0, 0, -1);
+planeMesh.translateOnAxis(planeNormal, planeDepth);
 scene.add(planeMesh);
 
 // Warpped scene
@@ -59,34 +53,43 @@ const warpGeo = new THREE.PlaneGeometry(2, 2);
 const warpMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uTexture: { value: wrapTexture },
-    uProj: { value: camA.projectionMatrix },
-    uProjInv: { value: camB.projectionMatrixInverse },
-    uHomo: { value: new THREE.Matrix4() }
+    uProj: { value: new THREE.Matrix4() },
+    uProjInv: { value: new THREE.Matrix4() },
+    uView: { value: new THREE.Matrix4() },
+    uPlaneN: { value: planeNormal },
+    uPlaneD: { value: planeDepth }
   },
   vertexShader: `
-  uniform mat4 uProj;
-  uniform mat4 uProjInv;
-  uniform mat4 uHomo;
   varying vec2 vTexCoord;
   void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    vec4 b_ndc = vec4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, -1, 1);
-    vec4 b_proj4 = uProjInv * b_ndc;
-    vec3 b_proj3 = vec3(b_proj4) / b_proj4.w;
-    vec3 planeN = vec3(0, 0, -1);
-    float l = length(b_proj3);
-    float factor = 300.0 * dot(planeN, b_proj3) / (l * l);
-    vec3 Pb = b_proj3 * factor;
-    vec4 Pa = uHomo * vec4(Pb, 1);
-    vec4 a_ndc = uProj * Pa;
-    vec3 t = vec3(a_ndc) / a_ndc.w;
-    vTexCoord = vec2((t.x + 1.0) / 2.0, (t.y + 1.0) / 2.0);
+    vTexCoord = uv;
   }`,
   fragmentShader: `
+  uniform mat4 uProj;
+  uniform mat4 uProjInv;
+  uniform mat4 uView;
+  uniform vec3 uPlaneN;
+  uniform float uPlaneD;
   uniform sampler2D uTexture;
   varying vec2 vTexCoord;
+
   void main() {
-    gl_FragColor = texture2D(uTexture, vTexCoord);
+    vec4 a_ndc = vec4(vTexCoord.x * 2.0 - 1.0, vTexCoord.y * 2.0 - 1.0, -1, 1);
+    vec4 a_proj4 = uProjInv * a_ndc;
+    vec3 a_proj3 = a_proj4.xyz / a_proj4.w;
+    float factor = uPlaneD / dot(uPlaneN, a_proj3);
+    vec3 Pa = a_proj3 * factor;
+    vec4 Pb = uView * vec4(Pa, 1.0);
+    vec4 b_ndc4 = uProj * Pb;
+    vec3 b_ndc3 = b_ndc4.xyz / b_ndc4.w;
+    vec2 warpTex = vec2((b_ndc3.x + 1.0) / 2.0, (b_ndc3.y + 1.0) / 2.0);
+
+    if (warpTex.x < 0.0 || warpTex.x > 1.0 || warpTex.y < 0.0 || warpTex.y > 1.0) {
+      gl_FragColor = vec4(0.2, 0.2, 0.2, 1);
+    } else {
+      gl_FragColor = texture2D(uTexture, warpTex);
+    }
   }
   `
 });
@@ -112,44 +115,30 @@ function animateB() {
 }
 
 function animateWarp() {
-  // const worldA = new THREE.Matrix4().makeTranslation(camA.getWorldPosition(new THREE.Vector3()));
-  // worldA.invert();
-  warpMaterial.uniforms.uHomo.value = camA.matrixWorld;
-  warpMaterial.uniforms.uProj.value = camA.projectionMatrix;
-  warpMaterial.uniforms.uProjInv.value = camB.projectionMatrixInverse;
+  warpMaterial.uniforms.uProjInv.value = camA.projectionMatrixInverse;
+  warpMaterial.uniforms.uView.value = camB.matrixWorldInverse;
+  warpMaterial.uniforms.uProj.value = camB.projectionMatrix;
   rendererWarp.render(warpScene, camOrtho);
 }
 
-function vecMul(v1, v2) {
-  return new THREE.Matrix3(
-    v1.x * v2.x, v1.x * v2.y, v1.x * v2.z,
-    v1.y * v2.x, v1.y * v2.y, v1.y * v2.z,
-    v1.x * v2.x, v1.z * v2.y, v1.z * v2.z
-  );
-}
 rendererOverall.setAnimationLoop(animateOverall);
 rendererA.setAnimationLoop(animateA);
 rendererB.setAnimationLoop(animateB);
 rendererWarp.setAnimationLoop(animateWarp);
 
-// const b1 = new THREE.Vector2()
-// const b2 = new THREE.Vector2()
-// camB.getViewBounds(camB.near, b1, b2)
-// console.log(camB.near, b1, b2)
-
 setTimeout(function () {
-  const p = new THREE.Vector4(-1, 1, -1, 1)
-  p.applyMatrix4(camB.projectionMatrixInverse)
-  console.log(p)
-  const bProj = new THREE.Vector3(p.x / p.w, p.y / p.w, p.z / p.w);
-  console.log(bProj);
-  const n = new THREE.Vector3(0, 0, -1);
-  const factor = n.dot(bProj) / bProj.lengthSq() * 300;
-  console.log(factor)
-  bProj.multiplyScalar(factor)
-  console.log(bProj)
-  bProj.applyMatrix4(camA.matrixWorldInverse)
-  console.log(bProj)
-  bProj.applyMatrix4(camA.projectionMatrix)
-  console.log(bProj)
+  const size = new THREE.Vector2();
+  camB.getViewSize(300, size);
+  console.log(size)
+  const p = new THREE.Vector3(1, -1, -1);
+  const b = p.applyMatrix4(camB.projectionMatrixInverse);
+  console.log(b);
+  const factor = planeDepth / b.dot(planeNormal);
+  const Pb = b.multiplyScalar(factor);
+  console.log(Pb);
+  const Pa = Pb.applyMatrix4(camA.matrixWorldInverse);
+  console.log(camA.matrixWorldInverse)
+  console.log(Pa);
+  const a = Pa.applyMatrix4(camA.projectionMatrix);
+  console.log(a);
 }, 1000)
