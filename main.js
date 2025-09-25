@@ -15,13 +15,14 @@ const camOverall = new THREE.PerspectiveCamera(75, canvasOverall.width / canvasO
 camOverall.position.set(30, 50, 80);
 camOverall.lookAt(0, 0, -200);
 
-// Camera A at origin
+// Camera A
 const camA = new THREE.PerspectiveCamera(20, canvasA.width / canvasA.height, 100, 1000);
+camA.position.set(30, 0, 0);
 
-// Camera B floating
+// Camera B
 const camB = new THREE.PerspectiveCamera(20, canvasB.width / canvasB.height, 100, 1000);
-// camB.rotateY(-Math.PI / 16)
-camB.position.set(0, 0, -20);
+camB.rotateY(-Math.PI / 8);
+camB.position.set(-50, 0, 80);
 
 // Scene creation
 const scene = new THREE.Scene();
@@ -39,12 +40,13 @@ scene.add(camBHelper);
 
 // Plane
 const planeTex = new THREE.TextureLoader().load("https://upload.wikimedia.org/wikipedia/commons/7/70/Checkerboard_pattern.svg");
-const planeGeo = new THREE.PlaneGeometry(105.796, 105.796);
+const planeGeo = new THREE.PlaneGeometry(100, 100);
 const planeMaterial = new THREE.MeshBasicMaterial({ map: planeTex });
 const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-const planeDepth = 300;
-const planeNormal = new THREE.Vector3(0, 0, -1);
-planeMesh.translateOnAxis(planeNormal, planeDepth);
+const planeNormal = new THREE.Vector3(0.3, 0, -1).normalize();
+const planeDepth = 200;
+planeMesh.lookAt(planeNormal.clone().negate());
+planeMesh.translateZ(-planeDepth);
 scene.add(planeMesh);
 
 // Warpped scene
@@ -56,11 +58,12 @@ const warpMaterial = new THREE.ShaderMaterial({
     uProj: { value: new THREE.Matrix4() },
     uProjInv: { value: new THREE.Matrix4() },
     uView: { value: new THREE.Matrix4() },
-    uPlaneN: { value: planeNormal },
-    uPlaneD: { value: planeDepth }
+    uPlaneN: { value: new THREE.Vector3() },
+    uPlaneD: { value: 0 }
   },
   vertexShader: `
   varying vec2 vTexCoord;
+
   void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     vTexCoord = uv;
@@ -86,7 +89,7 @@ const warpMaterial = new THREE.ShaderMaterial({
     vec2 warpTex = vec2((b_ndc3.x + 1.0) / 2.0, (b_ndc3.y + 1.0) / 2.0);
 
     if (warpTex.x < 0.0 || warpTex.x > 1.0 || warpTex.y < 0.0 || warpTex.y > 1.0) {
-      gl_FragColor = vec4(0.2, 0.2, 0.2, 1);
+      gl_FragColor = vec4(0, 0, 0, 1);
     } else {
       gl_FragColor = texture2D(uTexture, warpTex);
     }
@@ -116,29 +119,21 @@ function animateB() {
 
 function animateWarp() {
   warpMaterial.uniforms.uProjInv.value = camA.projectionMatrixInverse;
-  warpMaterial.uniforms.uView.value = camB.matrixWorldInverse;
+  warpMaterial.uniforms.uView.value = camB.matrixWorldInverse.clone().multiply(camA.matrixWorld);
   warpMaterial.uniforms.uProj.value = camB.projectionMatrix;
+
+  const pointOnPlane = planeNormal.clone().multiplyScalar(planeDepth);
+  const newNorm = planeNormal.clone().applyMatrix4(camA.matrixWorld.clone().transpose());
+  const newPoP = pointOnPlane.applyMatrix4(camA.matrixWorldInverse);
+  const newD = newPoP.dot(newNorm);
+
+  warpMaterial.uniforms.uPlaneD.value = newD;
+  warpMaterial.uniforms.uPlaneN.value = newNorm;
+
   rendererWarp.render(warpScene, camOrtho);
 }
 
 rendererOverall.setAnimationLoop(animateOverall);
-rendererA.setAnimationLoop(animateA);
+rendererA.setAnimationLoop(animateA);~
 rendererB.setAnimationLoop(animateB);
 rendererWarp.setAnimationLoop(animateWarp);
-
-setTimeout(function () {
-  const size = new THREE.Vector2();
-  camB.getViewSize(300, size);
-  console.log(size)
-  const p = new THREE.Vector3(1, -1, -1);
-  const b = p.applyMatrix4(camB.projectionMatrixInverse);
-  console.log(b);
-  const factor = planeDepth / b.dot(planeNormal);
-  const Pb = b.multiplyScalar(factor);
-  console.log(Pb);
-  const Pa = Pb.applyMatrix4(camA.matrixWorldInverse);
-  console.log(camA.matrixWorldInverse)
-  console.log(Pa);
-  const a = Pa.applyMatrix4(camA.projectionMatrix);
-  console.log(a);
-}, 1000)
