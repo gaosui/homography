@@ -17,12 +17,12 @@ camOverall.lookAt(0, 0, -200);
 
 // Camera A
 const camA = new THREE.PerspectiveCamera(20, canvasA.width / canvasA.height, 100, 1000);
-camA.position.set(30, 0, 0);
+camA.position.set(60, 0, 20);
 
 // Camera B
 const camB = new THREE.PerspectiveCamera(20, canvasB.width / canvasB.height, 100, 1000);
 camB.rotateY(-Math.PI / 8);
-camB.position.set(-50, 0, 80);
+camB.position.set(-50, 0, 30);
 
 // Scene creation
 const scene = new THREE.Scene();
@@ -43,11 +43,10 @@ const planeTex = new THREE.TextureLoader().load("https://upload.wikimedia.org/wi
 const planeGeo = new THREE.PlaneGeometry(100, 100);
 const planeMaterial = new THREE.MeshBasicMaterial({ map: planeTex });
 const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-const planeNormal = new THREE.Vector3(0.3, 0, -1).normalize();
-const planeDepth = 200;
-planeMesh.lookAt(planeNormal.clone().negate());
+// Define in B's camera frame
+const planeDepth = 350;
+camBHelper.add(planeMesh);
 planeMesh.translateZ(-planeDepth);
-scene.add(planeMesh);
 
 // Warpped scene
 const wrapTexture = new THREE.CanvasTexture(canvasB);
@@ -55,9 +54,8 @@ const warpGeo = new THREE.PlaneGeometry(2, 2);
 const warpMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uTexture: { value: wrapTexture },
-    uProj: { value: new THREE.Matrix4() },
+    uProjView: { value: new THREE.Matrix4() },
     uProjInv: { value: new THREE.Matrix4() },
-    uView: { value: new THREE.Matrix4() },
     uPlaneN: { value: new THREE.Vector3() },
     uPlaneD: { value: 0 }
   },
@@ -69,9 +67,8 @@ const warpMaterial = new THREE.ShaderMaterial({
     vTexCoord = uv;
   }`,
   fragmentShader: `
-  uniform mat4 uProj;
+  uniform mat4 uProjView;
   uniform mat4 uProjInv;
-  uniform mat4 uView;
   uniform vec3 uPlaneN;
   uniform float uPlaneD;
   uniform sampler2D uTexture;
@@ -83,8 +80,7 @@ const warpMaterial = new THREE.ShaderMaterial({
     vec3 a_proj3 = a_proj4.xyz / a_proj4.w;
     float factor = uPlaneD / dot(uPlaneN, a_proj3);
     vec3 Pa = a_proj3 * factor;
-    vec4 Pb = uView * vec4(Pa, 1.0);
-    vec4 b_ndc4 = uProj * Pb;
+    vec4 b_ndc4 = uProjView * vec4(Pa, 1.0);
     vec3 b_ndc3 = b_ndc4.xyz / b_ndc4.w;
     vec2 warpTex = vec2((b_ndc3.x + 1.0) / 2.0, (b_ndc3.y + 1.0) / 2.0);
 
@@ -118,13 +114,15 @@ function animateB() {
 }
 
 function animateWarp() {
+  const AtoB = camB.matrixWorldInverse.clone().multiply(camA.matrixWorld);
+  const BtoA = camA.matrixWorldInverse.clone().multiply(camB.matrixWorld);
   warpMaterial.uniforms.uProjInv.value = camA.projectionMatrixInverse;
-  warpMaterial.uniforms.uView.value = camB.matrixWorldInverse.clone().multiply(camA.matrixWorld);
-  warpMaterial.uniforms.uProj.value = camB.projectionMatrix;
+  warpMaterial.uniforms.uProjView.value = camB.projectionMatrix.clone().multiply(AtoB);
 
+  const planeNormal = new THREE.Vector3(0, 0, -1);
   const pointOnPlane = planeNormal.clone().multiplyScalar(planeDepth);
-  const newNorm = planeNormal.clone().applyMatrix4(camA.matrixWorld.clone().transpose());
-  const newPoP = pointOnPlane.applyMatrix4(camA.matrixWorldInverse);
+  const newPoP = pointOnPlane.applyMatrix4(BtoA);
+  const newNorm = planeNormal.clone().applyMatrix4(AtoB.transpose());
   const newD = newPoP.dot(newNorm);
 
   warpMaterial.uniforms.uPlaneD.value = newD;
@@ -134,6 +132,6 @@ function animateWarp() {
 }
 
 rendererOverall.setAnimationLoop(animateOverall);
-rendererA.setAnimationLoop(animateA);~
-rendererB.setAnimationLoop(animateB);
+rendererA.setAnimationLoop(animateA); ~
+  rendererB.setAnimationLoop(animateB);
 rendererWarp.setAnimationLoop(animateWarp);
