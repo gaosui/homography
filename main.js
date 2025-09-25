@@ -132,6 +132,6 @@ function animateWarp() {
 }
 
 rendererOverall.setAnimationLoop(animateOverall);
-rendererA.setAnimationLoop(animateA); ~
-  rendererB.setAnimationLoop(animateB);
+rendererA.setAnimationLoop(animateA);
+rendererB.setAnimationLoop(animateB);
 rendererWarp.setAnimationLoop(animateWarp);
