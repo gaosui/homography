@@ -17,12 +17,13 @@ camOverall.lookAt(0, 0, -200);
 
 // Camera A
 const camA = new THREE.PerspectiveCamera(20, canvasA.width / canvasA.height, 100, 1000);
-camA.position.set(60, 0, 20);
+camA.position.set(40, 0, 20)
+camA.rotateY(Math.PI / 20);
 
 // Camera B
 const camB = new THREE.PerspectiveCamera(20, canvasB.width / canvasB.height, 100, 1000);
 camB.rotateY(-Math.PI / 8);
-camB.position.set(-50, 0, 30);
+camB.position.set(-150, 0, 30);
 
 // Scene creation
 const scene = new THREE.Scene();
@@ -43,10 +44,11 @@ const planeTex = new THREE.TextureLoader().load("https://upload.wikimedia.org/wi
 const planeGeo = new THREE.PlaneGeometry(100, 100);
 const planeMaterial = new THREE.MeshBasicMaterial({ map: planeTex });
 const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-// Define in B's camera frame
-const planeDepth = 350;
-camBHelper.add(planeMesh);
+// Define in world frame
+const planeDepth = 300;
+const planeNormal = new THREE.Vector3(0, 0, -1);
 planeMesh.translateZ(-planeDepth);
+scene.add(planeMesh);
 
 // Warpped scene
 const wrapTexture = new THREE.CanvasTexture(canvasB);
@@ -114,15 +116,17 @@ function animateB() {
 }
 
 function animateWarp() {
-  const AtoB = camB.matrixWorldInverse.clone().multiply(camA.matrixWorld);
-  const BtoA = camA.matrixWorldInverse.clone().multiply(camB.matrixWorld);
-  warpMaterial.uniforms.uProjInv.value = camA.projectionMatrixInverse;
-  warpMaterial.uniforms.uProjView.value = camB.projectionMatrix.clone().multiply(AtoB);
+  const world_from_A = camA.matrixWorld;
+  const A_from_world = camA.matrixWorldInverse;
+  const B_from_world = camB.matrixWorldInverse;
+  const B_from_A = B_from_world.clone().multiply(world_from_A);
 
-  const planeNormal = new THREE.Vector3(0, 0, -1);
+  warpMaterial.uniforms.uProjInv.value = camA.projectionMatrixInverse;
+  warpMaterial.uniforms.uProjView.value = camB.projectionMatrix.clone().multiply(B_from_A);
+
   const pointOnPlane = planeNormal.clone().multiplyScalar(planeDepth);
-  const newPoP = pointOnPlane.applyMatrix4(BtoA);
-  const newNorm = planeNormal.clone().applyMatrix4(AtoB.transpose());
+  const newPoP = pointOnPlane.applyMatrix4(A_from_world);
+  const newNorm = planeNormal.clone().applyMatrix4(world_from_A.clone().transpose());
   const newD = newPoP.dot(newNorm);
 
   warpMaterial.uniforms.uPlaneD.value = newD;
